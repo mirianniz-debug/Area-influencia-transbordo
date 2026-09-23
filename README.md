@@ -4,6 +4,8 @@ Geoportal interativo para análise da área de influência de uma estação de t
 
 🔗 **Acesse ao vivo:** https://mirianniz-debug.github.io/Area-influencia-transbordo/
 
+👤 **Parte do portfólio de:** https://mirianniz-debug.github.io/Portfolio/
+
 ## Sobre
 
 Mapa web para consulta espacial da área de influência/impacto associada à operação de uma estação de transbordo, servindo de apoio a estudos ambientais e de planejamento territorial.
