@@ -158,6 +158,21 @@
   .area-stat .area-bar{width:100%;height:4px;border-radius:2px;background:var(--line);margin-top:3px;overflow:hidden;}
   .area-stat .area-bar-fill{height:100%;border-radius:2px;background:var(--layer-color,var(--ink-soft));transition:width .4s ease;}
 
+  .name-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+  .name-row .name{flex:1;min-width:0;}
+  .name-stat{flex:0 0 auto;text-align:right;line-height:1.2;}
+  .name-stat .v{display:block;font:600 11.5px var(--font-mono);color:var(--ink);white-space:nowrap;}
+  .name-stat .p{display:block;font:500 10px var(--font-mono);color:var(--ink-soft);white-space:nowrap;}
+
+  .opacity-ctl{display:flex;align-items:center;gap:8px;margin-top:7px;}
+  .opacity-ctl .lbl{font:500 9.5px var(--font-mono);color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;}
+  .opacity-ctl .val{font:600 10px var(--font-mono);color:var(--ink);min-width:30px;text-align:right;}
+  .opacity-ctl input[type=range]{
+    flex:1;min-width:0;height:16px;margin:0;cursor:pointer;
+    accent-color:var(--layer-color,var(--ink-soft));
+  }
+  .layer-row.off .opacity-ctl{opacity:.45;}
+
   .basemap-row{display:flex;gap:6px;margin-top:2px;}
   .basemap-btn{
     flex:1;padding:7px 4px;font:500 11.5px var(--font-body);text-align:center;
@@ -401,6 +416,7 @@ function colorVarToRgb(v){
 
 function buildInfraLayer(def){
   let layer;
+  def.baseFill = def.fillOpacity !== undefined ? def.fillOpacity : 0.85;
   if(def.geom === 'point'){
     const icon = L.divIcon({className:'', html:`<div style="width:15px;height:15px;border-radius:50%;background:${colorVarToRgb(def.color)};border:2.5px solid #16232e;box-shadow:0 0 0 4px ${colorVarToRgb(def.color)}55;"></div>`, iconSize:[15,15], iconAnchor:[7,7]});
     layer = L.geoJSON(def.data, {pointToLayer:(f,latlng)=>L.marker(latlng,{icon}), onEachFeature:(f,l)=>l.bindPopup(def.popup(f))});
@@ -410,6 +426,18 @@ function buildInfraLayer(def){
     layer = L.geoJSON(def.data, {style:makeStyle(def.color, def.dashed, def.fillOpacity), onEachFeature:(f,l)=>l.bindPopup(def.popup(f))});
   }
   return layer;
+}
+
+/* Aplica a transparência (0 = opaca, 1 = totalmente transparente) a uma camada */
+function applyTransparency(def, layer, t){
+  const k = 1 - t;
+  layer.eachLayer(l=>{
+    if(l.setOpacity){ l.setOpacity(k); }                       // pontos (marcadores)
+    else if(l.setStyle){
+      if(def.geom === 'polygon') l.setStyle({opacity:k, fillOpacity:def.baseFill*k});
+      else l.setStyle({opacity:0.95*k});                       // linhas
+    }
+  });
 }
 
 function renderRow(container, def, layer){
@@ -425,6 +453,7 @@ function renderRow(container, def, layer){
   cb.checked = !!def.defaultOn;
   cb.addEventListener('change', ()=>{
     if(cb.checked){ layer.addTo(map); } else { map.removeLayer(layer); }
+    row.classList.toggle('off', !cb.checked);
   });
 
   const swatchClass = def.geom === 'point' ? 'g-point' : def.geom === 'line' ? 'g-line' : 'g-polygon';
@@ -436,16 +465,38 @@ function renderRow(container, def, layer){
 
   const meta = document.createElement('div');
   meta.className = 'layer-meta';
-  meta.innerHTML = `<div class="name">${def.name}</div>`;
+  let statHtml = '';
+  let pct = 0;
+  if(def.areaHa !== undefined){
+    pct = def.areaPct !== undefined ? def.areaPct : (zonasTotalHa ? (def.areaHa/zonasTotalHa*100) : 0);
+    const pctTxt = pct.toLocaleString('pt-BR',{minimumFractionDigits: pct<10 && pct!==0 ? 1 : 0, maximumFractionDigits: pct<10 ? 1 : 0});
+    statHtml = `<div class="name-stat" title="Área da camada e porcentagem em relação ao total"><span class="v">${def.areaHa.toLocaleString('pt-BR',{maximumFractionDigits:1})} ha</span><span class="p">${pctTxt}%</span></div>`;
+  }
+  meta.innerHTML = `<div class="name-row"><div class="name">${def.name}</div>${statHtml}</div>`;
 
   if(def.areaHa !== undefined){
-    const stat = document.createElement('div');
-    stat.className = 'area-stat';
-    const pct = def.areaPct !== undefined ? def.areaPct : (zonasTotalHa ? (def.areaHa/zonasTotalHa*100) : 0);
-    stat.innerHTML = `<div class="area-row"><span class="area-value">${def.areaHa.toLocaleString('pt-BR',{maximumFractionDigits:1})} ha</span><span class="area-pct">${pct.toFixed(0)}%</span></div>
-      <div class="area-bar"><div class="area-bar-fill" style="width:${Math.min(pct,100)}%"></div></div>`;
-    meta.appendChild(stat);
+    const bar = document.createElement('div');
+    bar.className = 'area-stat';
+    bar.innerHTML = `<div class="area-bar"><div class="area-bar-fill" style="width:${Math.min(pct,100)}%"></div></div>`;
+    meta.appendChild(bar);
   }
+
+  /* Controle de transparência */
+  const ctl = document.createElement('div');
+  ctl.className = 'opacity-ctl';
+  ctl.innerHTML = `<span class="lbl">Transparência</span>
+    <input type="range" min="0" max="100" step="5" value="0" aria-label="Transparência da camada ${def.name}">
+    <span class="val">0%</span>`;
+  const slider = ctl.querySelector('input');
+  const valTxt = ctl.querySelector('.val');
+  slider.addEventListener('input', ()=>{
+    valTxt.textContent = slider.value + '%';
+    applyTransparency(def, layer, slider.value/100);
+  });
+  // evita que mexer no controle marque/desmarque a camada ou feche o painel
+  ['click','mousedown','touchstart'].forEach(ev=>ctl.addEventListener(ev, e=>e.stopPropagation()));
+  ctl.addEventListener('click', e=>e.preventDefault());
+  meta.appendChild(ctl);
 
   row.appendChild(cb);
   row.appendChild(swatch);
