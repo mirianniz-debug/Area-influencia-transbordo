@@ -372,9 +372,11 @@ function extendUnion(layer){
 
 const ZONE_META = {
   'ZI-II': {name:'Zona industrial',                   color:'var(--indigo)'},
-  'ZPR 2': {name:'Zona predominantemente residencial',color:'var(--slate-light)'},
   'ZTL':   {name:'Zona de turismo e lazer',           color:'var(--ochre)'}
 };
+
+/* Zona ZPR 2 está fora da área de influência: removida dos dados, para não entrar nos totais e percentuais */
+DATA.zonas.features = DATA.zonas.features.filter(f=>f.properties.Sigla!=='ZPR 2');
 
 const areaInfluenciaHa = collectionAreaHa(DATA.areaInfluencia);
 const zonasTotalHa = collectionAreaHa(DATA.zonas);
